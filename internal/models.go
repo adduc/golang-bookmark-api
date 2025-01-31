@@ -96,3 +96,7 @@ type UserBookmarkResponse struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
+
+func Migrate(db *gorm.DB) {
+	db.AutoMigrate(&Bookmark{}, &Tag{}, &AuthMethod{}, &User{}, &UserAuth{}, &UserBookmark{}, &List{}, &ListBookmark{}, &UserBookmarkTag{})
+}
