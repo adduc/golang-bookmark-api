@@ -63,103 +63,13 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/adduc/exercise-golang-bookmark-db/internal"
 )
-
-type Bookmark struct {
-	gorm.Model
-	ID  uint   `gorm:"primaryKey"`
-	URL string `gorm:"unique"`
-	// title and description should be optional, as we may not always have them
-	Title       *string `gorm:"default:null"`
-	Description *string `gorm:"default:null"`
-}
-
-type Tag struct {
-	gorm.Model
-	ID   uint   `gorm:"primaryKey"`
-	Name string `gorm:"unique"`
-}
-
-type AuthMethod struct {
-	gorm.Model
-	ID   uint   `gorm:"primaryKey"`
-	Name string `gorm:"unique"`
-}
-
-type User struct {
-	gorm.Model
-	ID       uint   `gorm:"primaryKey"`
-	Username string `gorm:"unique"`
-}
-
-type UserAuth struct {
-	gorm.Model
-	ID     uint `gorm:"primaryKey"`
-	UserID uint
-	Method string
-	Value  string
-
-	User User
-}
-
-type UserBookmark struct {
-	gorm.Model
-	ID         uint `gorm:"primaryKey"`
-	UserID     uint
-	BookmarkID uint
-	Note       string
-
-	User     *User
-	Bookmark *Bookmark
-}
-
-type List struct {
-	gorm.Model
-	ID     uint `gorm:"primaryKey"`
-	UserID uint
-	Name   string
-
-	User User
-}
-
-type ListBookmark struct {
-	gorm.Model
-	ID         uint `gorm:"primaryKey"`
-	ListID     uint
-	BookmarkID uint
-
-	List     List
-	Bookmark Bookmark
-}
-
-type UserBookmarkTag struct {
-	gorm.Model
-	ID         uint `gorm:"primaryKey"`
-	UserID     uint
-	BookmarkID uint
-	TagID      uint
-
-	User     User
-	Bookmark Bookmark
-	Tag      Tag
-}
-
-type UserBookmarkResponse struct {
-	BookmarkID     uint      `json:"bookmark_id"`
-	UserBookmarkID uint      `json:"user_bookmark_id"`
-	UserID         uint      `json:"user_id"`
-	URL            string    `json:"url"`
-	Title          *string   `json:"title"`
-	Description    *string   `json:"description"`
-	Note           string    `json:"note"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-}
 
 // Errors
 
@@ -171,7 +81,7 @@ func (e ValidationError) Error() string {
 	return e.Message
 }
 
-func findOrCreateBookmark(db *gorm.DB, bookmarkURL string) (*Bookmark, error) {
+func findOrCreateBookmark(db *gorm.DB, bookmarkURL string) (*internal.Bookmark, error) {
 	// Check if the URL is valid
 	parsedURL, err := url.ParseRequestURI(bookmarkURL)
 
@@ -184,7 +94,7 @@ func findOrCreateBookmark(db *gorm.DB, bookmarkURL string) (*Bookmark, error) {
 	}
 
 	// Check if the bookmark already exists
-	var bookmark Bookmark
+	var bookmark internal.Bookmark
 	err = db.Limit(1).Find(&bookmark, "url = ?", bookmarkURL).Error
 
 	if err != nil {
@@ -196,7 +106,7 @@ func findOrCreateBookmark(db *gorm.DB, bookmarkURL string) (*Bookmark, error) {
 	}
 
 	// Create the bookmark
-	bookmark = Bookmark{
+	bookmark = internal.Bookmark{
 		URL: bookmarkURL,
 	}
 
@@ -215,7 +125,7 @@ func main() {
 		panic("failed to connect database")
 	}
 
-	db.AutoMigrate(&Bookmark{}, &Tag{}, &AuthMethod{}, &User{}, &UserAuth{}, &UserBookmark{}, &List{}, &ListBookmark{}, &UserBookmarkTag{})
+	db.AutoMigrate(&internal.Bookmark{}, &internal.Tag{}, &internal.AuthMethod{}, &internal.User{}, &internal.UserAuth{}, &internal.UserBookmark{}, &internal.List{}, &internal.ListBookmark{}, &internal.UserBookmarkTag{})
 
 	r.GET("/", func(c *gin.Context) {
 		c.String(http.StatusOK, "Welcome to the Bookmark API")
@@ -263,7 +173,7 @@ func main() {
 		// Assuming user ID is 1 for now, this should be replaced with actual user ID from authentication
 		userID := uint(1)
 
-		var userBookmark UserBookmark
+		var userBookmark internal.UserBookmark
 		err = db.Limit(1).Find(&userBookmark, "user_id = ? AND bookmark_id = ?", userID, bookmark.ID).Error
 
 		if err != nil {
@@ -274,7 +184,7 @@ func main() {
 
 		if userBookmark.ID == 0 {
 			// user bookmark not found
-			userBookmark = UserBookmark{
+			userBookmark = internal.UserBookmark{
 				UserID:     userID,
 				BookmarkID: bookmark.ID,
 				Note:       json.Note,
@@ -296,7 +206,7 @@ func main() {
 			}
 		}
 
-		response := UserBookmarkResponse{
+		response := internal.UserBookmarkResponse{
 			BookmarkID:     bookmark.ID,
 			UserBookmarkID: userBookmark.ID,
 			UserID:         userBookmark.UserID,
