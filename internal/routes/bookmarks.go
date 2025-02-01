@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/adduc/exercise-golang-bookmark-db/internal"
 	"github.com/gin-gonic/gin"
@@ -13,7 +14,66 @@ import (
 func addBookmarkRoutes(r *gin.RouterGroup, db *gorm.DB) {
 
 	r.GET("/me/bookmarks", func(c *gin.Context) {
-		// Handler logic for listing user bookmarks
+		lastIDStr := c.Query("last_id")
+		lastID, _ := strconv.ParseUint(lastIDStr, 10, 64)
+
+		limitStr := c.DefaultQuery("limit", "100")
+		limit, _ := strconv.Atoi(limitStr)
+		if limit < 1 {
+			limit = 10
+		}
+
+		userID := uint(1)
+		var userBookmarks []internal.UserBookmark
+
+		query := db.Preload("Bookmark").Where("user_id = ?", userID)
+		if lastID > 0 {
+			query = query.Where("id > ?", lastID)
+		}
+
+		// request one more than the limit to determine if there are more results
+		err := query.Limit(limit + 1).Find(&userBookmarks).Error
+		if err != nil {
+			log.Printf("Failed to query user bookmarks: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+			return
+		}
+
+		hasMore := false
+		if len(userBookmarks) > limit {
+			hasMore = true
+			userBookmarks = userBookmarks[:limit]
+		}
+
+		var nextID uint
+		if len(userBookmarks) > 0 {
+			nextID = userBookmarks[len(userBookmarks)-1].ID
+		}
+
+		var response []internal.UserBookmarkResponse
+		for _, userBookmark := range userBookmarks {
+			response = append(response, internal.UserBookmarkResponse{
+				BookmarkID:     userBookmark.BookmarkID,
+				UserBookmarkID: userBookmark.ID,
+				UserID:         userBookmark.UserID,
+				URL:            userBookmark.Bookmark.URL,
+				Title:          userBookmark.Bookmark.Title,
+				Description:    userBookmark.Bookmark.Description,
+				Note:           userBookmark.Note,
+				CreatedAt:      userBookmark.CreatedAt,
+				UpdatedAt:      userBookmark.UpdatedAt,
+			})
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"data": response,
+			"meta": gin.H{
+				"last_id":  lastID,
+				"next_id":  nextID,
+				"limit":    limit,
+				"has_more": hasMore,
+			},
+		})
 	})
 
 	r.POST("/me/bookmarks", func(c *gin.Context) {
